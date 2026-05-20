@@ -7,9 +7,9 @@ const seedAdminUser = async () => {
     console.log('Starting to seed admin user...');
     
     // Admin credentials
-    const adminEmail = 'admin@nepmart.com';
+    const adminEmail = 'admin@gmail.com';
     const adminUsername = 'admin';
-    const adminPassword = 'Admin@123'; // Change this to your desired password
+    const adminPassword = 'admin123';
     
     // Hash the password
     const hashedPassword = await bcrypt.hash(adminPassword, 10);

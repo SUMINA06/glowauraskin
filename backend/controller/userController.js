@@ -84,6 +84,17 @@ const createAdminUser = async (req, res) => {
       is_admin: true,
     };
 
+    const [existingByEmail] = await User.findByEmail(email);
+    const [existingByUsername] = await User.findByUsername(username);
+
+    if ((existingByEmail && existingByEmail.length > 0) || (existingByUsername && existingByUsername.length > 0)) {
+      console.log("Admin user already exists");
+      return res.status(200).json({
+        success: true,
+        message: "Admin user already exists",
+      });
+    }
+
     const result = await User.create(userData);
 
     res.status(201).json({
@@ -92,19 +103,27 @@ const createAdminUser = async (req, res) => {
       userId: result[0].insertId,
     });
   } catch (error) {
-    console.error("Error creating admin user:", error);
+    console.error("Error creating admin user:", error.message || error);
 
-    // Handle duplicate entry errors
+    // Handle duplicate entry errors and existing admin gracefully
     if (error.code === "ER_DUP_ENTRY") {
-      let message = "Email or username already exists";
+      if (error.message.includes("email")) {
+        console.log("Admin user already exists");
+        return res.status(200).json({
+          success: true,
+          message: "Admin user already exists",
+        });
+      }
       if (error.message.includes("username")) {
-        message = "Username already exists";
-      } else if (error.message.includes("email")) {
-        message = "Email already exists";
+        console.warn("Admin username already exists");
+        return res.status(400).json({
+          success: false,
+          message: "Username already exists",
+        });
       }
       return res.status(400).json({
         success: false,
-        message: message,
+        message: "Email or username already exists",
       });
     }
 

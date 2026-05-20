@@ -424,6 +424,55 @@ const getOrdersByUser = async (req, res) => {
   }
 };
 
+const deleteOrder = async (req, res) => {
+  try {
+    const orderId = Number(req.params.id);
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order ID",
+      });
+    }
+
+    // Check if order exists
+    const rows = await Order.findByIdWithItems(orderId);
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // Delete order items first (due to foreign key constraints)
+    const deleteItemsQuery = "DELETE FROM order_items WHERE order_id = ?";
+    const db = require("../config/db");
+    await db.execute(deleteItemsQuery, [orderId]);
+
+    // Delete the order
+    const deleteOrderQuery = "DELETE FROM orders WHERE id = ?";
+    const [deleteResult] = await db.execute(deleteOrderQuery, [orderId]);
+
+    if (deleteResult.affectedRows === 0) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to delete order",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Order deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting order:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete order",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createOrder,
   checkStock,
@@ -431,4 +480,5 @@ module.exports = {
   getOrderById,
   updateOrderStatus,
   getOrdersByUser,
+  deleteOrder,
 };

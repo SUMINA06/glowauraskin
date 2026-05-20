@@ -381,6 +381,16 @@ const apiClient = {
     }
   },
 
+  deleteOrder: async (orderId) => {
+    try {
+      const response = await axiosInstance.delete(`/orders/${orderId}`);
+      return { data: response.data };
+    } catch (error) {
+      console.error("Error deleting order:", error);
+      throw error;
+    }
+  },
+
   // Product create/update/delete (supports optional image upload)
   createProduct: async (productData, imageFile = null) => {
     try {

@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS orders (
   INDEX idx_user_id (user_id),
   INDEX idx_order_number (order_number),
   INDEX idx_payment_status (payment_status),
-  INDEX idx_order_status (order_status)
+  INDEX idx_order_status (order_status),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 )`;
 
 const orderItemsTableQuery = `

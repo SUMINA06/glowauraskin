@@ -3,11 +3,11 @@ const mysql = require('mysql2');
 
 // Create the connection pool
 const pool = mysql.createPool({
-  host: process.env.MYSQL_HOST || '127.0.0.1',
-  user: process.env.MYSQL_USER || 'root',
-  password: process.env.MYSQL_PASSWORD || '',
-  database: process.env.MYSQL_DATABASE || 'nepmart',
-  port: parseInt(process.env.MYSQL_PORT, 10) || 3306,
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  port: parseInt(process.env.DB_PORT, 10),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -18,7 +18,12 @@ pool.on('error', (err) => {
   console.error('MySQL pool error:', err);
 });
 
-console.log(`MySQL connection: host=${process.env.MYSQL_HOST || 'localhost'} user=${process.env.MYSQL_USER || 'root'} database=${process.env.MYSQL_DATABASE || 'nepmart'} port=${process.env.MYSQL_PORT || 3306}`);
+console.log('MySQL connection:', {
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT,
+});
 
 // Export the promise-based version for cleaner code
 module.exports = pool.promise();

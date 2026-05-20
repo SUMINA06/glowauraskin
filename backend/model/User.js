@@ -94,4 +94,35 @@ const User = {
   },
 };
 
-module.exports = { User, createUserTable };
+const ensureDefaultAdmin = async () => {
+  try {
+    const adminEmail = 'admin@gmail.com';
+    const adminUsername = 'admin';
+    const adminPassword = 'admin123';
+
+    const [existingUserRows] = await db.query(
+      'SELECT id FROM users WHERE email = ? OR username = ?',
+      [adminEmail, adminUsername],
+    );
+
+    if (existingUserRows.length > 0) {
+      console.log('Default admin account already exists');
+      return;
+    }
+
+    const hashedPassword = await User.hashPassword(adminPassword);
+    await db.query(
+      'INSERT INTO users (username, email, password, role, is_admin) VALUES (?, ?, ?, ?, ?)',
+      [adminUsername, adminEmail, hashedPassword, 'admin', true],
+    );
+
+    console.log('Default admin account created:');
+    console.log('  email:', adminEmail);
+    console.log('  password:', adminPassword);
+    console.log('  role: admin');
+  } catch (error) {
+    console.error('Error creating default admin account:', error);
+  }
+};
+
+module.exports = { User, createUserTable, ensureDefaultAdmin };

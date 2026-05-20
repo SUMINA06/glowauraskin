@@ -36,28 +36,94 @@ async function migrateDatabase() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_user_id (user_id),
         INDEX idx_product_id (product_id),
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
       )
     `;
 
     await db.query(cartTableQuery);
     console.log("Cart items table created or already exists");
 
+    const [userColumnsResult] = await db.query(`
+      SELECT COLUMN_NAME
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'users'
+        AND COLUMN_NAME IN ('is_admin', 'updated_at', 'role')
+    `);
+
+    const existingUserColumns = Array.isArray(userColumnsResult) ? userColumnsResult : [];
+    const hasIsAdmin = existingUserColumns.some((column) => column.COLUMN_NAME === 'is_admin');
+    const hasUpdatedAt = existingUserColumns.some((column) => column.COLUMN_NAME === 'updated_at');
+    const hasRole = existingUserColumns.some((column) => column.COLUMN_NAME === 'role');
+
+    if (!hasIsAdmin) {
+      await db.query(`ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE`);
+      console.log("Added is_admin column to users table");
+    }
+
+    if (!hasUpdatedAt) {
+      await db.query(`ALTER TABLE users ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`);
+      console.log("Added updated_at column to users table");
+    }
+
+    if (!hasRole) {
+      await db.query(`ALTER TABLE users ADD COLUMN role ENUM('user', 'admin') DEFAULT 'user'`);
+      console.log("Added role column to users table");
+    }
+
     const productColumnCheck = await db.query(`
       SELECT COLUMN_NAME
       FROM INFORMATION_SCHEMA.COLUMNS
       WHERE TABLE_SCHEMA = DATABASE()
         AND TABLE_NAME = 'products'
-        AND COLUMN_NAME = 'stock'
+        AND COLUMN_NAME IN ('stock', 'is_active')
     `);
 
     const productColumns = Array.isArray(productColumnCheck)
       ? productColumnCheck[0]
       : productColumnCheck;
 
-    if (!productColumns || productColumns.length === 0) {
+    const hasStockColumn = productColumns.some((column) => column.COLUMN_NAME === 'stock');
+    const hasActiveColumn = productColumns.some((column) => column.COLUMN_NAME === 'is_active');
+
+    if (!hasStockColumn) {
       await db.query(`ALTER TABLE products ADD COLUMN stock INT NOT NULL DEFAULT 0`);
       console.log("Added stock column to products table");
+    }
+
+    if (!hasActiveColumn) {
+      await db.query(`ALTER TABLE products ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE`);
+      console.log("Added is_active column to products table");
+    }
+
+    // Ensure foreign keys exist for cart_items and orders
+    const [cartForeignKeys] = await db.query(`
+      SELECT CONSTRAINT_NAME
+      FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'cart_items'
+        AND COLUMN_NAME = 'product_id'
+        AND REFERENCED_TABLE_NAME = 'products'
+    `);
+
+    if (!cartForeignKeys || cartForeignKeys.length === 0) {
+      await db.query(`ALTER TABLE cart_items ADD CONSTRAINT fk_cart_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE`);
+      console.log("Added foreign key cart_items.product_id -> products.id");
+    }
+
+    const [orderUserForeignKeys] = await db.query(`
+      SELECT CONSTRAINT_NAME
+      FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'orders'
+        AND COLUMN_NAME = 'user_id'
+        AND REFERENCED_TABLE_NAME = 'users'
+    `);
+
+    if (!orderUserForeignKeys || orderUserForeignKeys.length === 0) {
+      await db.query(`ALTER TABLE orders ADD CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL`);
+      console.log("Added foreign key orders.user_id -> users.id");
     }
 
     // Ensure orders table has the latest schema and columns

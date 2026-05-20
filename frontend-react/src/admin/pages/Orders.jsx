@@ -15,9 +15,11 @@ const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(null);
+  const [deleting, setDeleting] = useState(null);
   const [selectedPaymentImage, setSelectedPaymentImage] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [notification, setNotification] = useState("");
+  const [notificationType, setNotificationType] = useState("success");
 
   useEffect(() => {
     loadOrders();
@@ -55,22 +57,41 @@ const Orders = () => {
     setSelectedPaymentImage(null);
   };
 
-  const showNotification = (message) => {
+  const showNotification = (message, type = "success") => {
     setNotification(message);
+    setNotificationType(type);
     window.setTimeout(() => setNotification(""), 4000);
   };
 
-  const updateStatus = async (orderId, status) => {
+  const updateStatus = async (orderId, newStatus) => {
     setSaving(orderId);
     try {
-      await apiClient.updateOrderStatus(orderId, { status });
-      showNotification("Order status updated successfully.");
+      await apiClient.updateOrderStatus(orderId, { status: newStatus });
+      showNotification("Order status updated successfully.", "success");
       await loadOrders();
     } catch (error) {
       console.error("Error updating order status:", error);
-      alert("Unable to update order status.");
+      showNotification("Unable to update order status.", "error");
     } finally {
       setSaving(null);
+    }
+  };
+
+  const deleteOrder = async (orderId, orderNumber) => {
+    if (!window.confirm(`Delete order ${orderNumber}? This cannot be undone.`)) {
+      return;
+    }
+
+    setDeleting(orderId);
+    try {
+      await apiClient.deleteOrder(orderId);
+      showNotification(`Order ${orderNumber} deleted successfully.`, "success");
+      await loadOrders();
+    } catch (error) {
+      console.error("Error deleting order:", error);
+      showNotification("Unable to delete order.", "error");
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -79,7 +100,7 @@ const Orders = () => {
       return <div className="item-list-empty">No items</div>;
     }
 
-    return orderItems.map((item) => {
+    return orderItems.slice(0, 2).map((item) => {
       const imageUrl = item.image
         ? item.image.startsWith("http")
           ? item.image
@@ -94,17 +115,30 @@ const Orders = () => {
               alt={item.name}
               className="order-item-thumb"
               loading="lazy"
+              onError={(e) => {
+                e.target.style.display = "none";
+              }}
             />
           ) : (
-            <div className="order-item-thumb-placeholder">No image</div>
+            <div className="order-item-thumb-placeholder">-</div>
           )}
           <div className="order-item-meta">
             <strong>{item.name || "Unnamed product"}</strong>
-            <div>Qty: {item.qty ?? item.quantity ?? 0}</div>
-            <div>Rs {item.totalPrice ?? item.price ?? 0}</div>
+            <small>
+              Qty: {item.qty ?? item.quantity ?? 0} × Rs{item.price ?? 0}
+            </small>
           </div>
         </div>
       );
+    });
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   };
 
@@ -112,10 +146,18 @@ const Orders = () => {
     <AdminLayout title="Orders">
       <div id="orders-page">
         <div className="page-header">
-          <h2>Orders</h2>
+          <h2>Orders Management</h2>
+          <div className="header-stats">
+            <span className="stat-badge">{orders.length} Total Orders</span>
+          </div>
         </div>
 
-        {notification && <div className="admin-notification">{notification}</div>}
+        {notification && (
+          <div className={`admin-notification notification-${notificationType}`}>
+            {notification}
+          </div>
+        )}
+
         <div className="table-container">
           <table className="data-table" id="orders-table">
             <thead>
@@ -126,52 +168,73 @@ const Orders = () => {
                 <th>Amount</th>
                 <th>Payment</th>
                 <th>Status</th>
-                <th>Created</th>
+                <th>Date</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: "center" }}>
-                    Loading orders...
+                  <td colSpan={8} style={{ textAlign: "center", padding: "30px" }}>
+                    <div className="loading-spinner">Loading orders...</div>
                   </td>
                 </tr>
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: "center" }}>
-                    No orders found.
+                  <td colSpan={8} style={{ textAlign: "center", padding: "30px" }}>
+                    <div className="empty-state">No orders found</div>
                   </td>
                 </tr>
               ) : (
                 orders.map((order) => (
                   <tr key={order.id || order._id}>
-                    <td>{order.orderNumber || order.order_number || "N/A"}</td>
                     <td>
-                      <div>{order.user?.name || order.customerName || "Unknown"}</div>
-                      <small>{order.user?.email || order.customerEmail || "No email"}</small>
-                      <div>{order.customerAddress || "No address"}</div>
+                      <span className="order-number">
+                        {order.orderNumber || order.order_number || "N/A"}
+                      </span>
                     </td>
-                    <td>{renderItems(order.orderItems)}</td>
-                    <td>Rs {order.totalPrice ?? order.total_amount ?? 0}</td>
+                    <td>
+                      <div className="customer-info">
+                        <strong>{order.customerName || "Unknown"}</strong>
+                        <small>{order.customerEmail || "No email"}</small>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="items-preview">
+                        {renderItems(order.orderItems)}
+                        {order.orderItems?.length > 2 && (
+                          <small className="more-items">
+                            +{order.orderItems.length - 2} more
+                          </small>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="amount-cell">
+                        <strong>Rs {order.totalPrice ?? order.total_amount ?? 0}</strong>
+                      </div>
+                    </td>
                     <td>
                       <div className="payment-cell payment-cell-compact">
-                        <div className="payment-method">
-                          {order.paymentMethod || order.payment_method || "Unknown"}
+                        <div className="payment-method-badge">
+                          {order.paymentMethod || order.payment_method || "N/A"}
                         </div>
-                        <div className="payment-actions">
-                          {order.paymentScreenshot || order.payment_screenshot ? (
-                            <button
-                              type="button"
-                              className="btn-payment"
-                              onClick={() => openPaymentModal(order.paymentScreenshot || order.payment_screenshot)}
-                            >
-                              Payment Done
-                            </button>
-                          ) : (
-                            <span className="payment-pending">Pending</span>
-                          )}
-                        </div>
+                        {order.paymentScreenshot || order.payment_screenshot ? (
+                          <button
+                            type="button"
+                            className="btn-payment-small"
+                            onClick={() =>
+                              openPaymentModal(
+                                order.paymentScreenshot || order.payment_screenshot
+                              )
+                            }
+                            title="View payment screenshot"
+                          >
+                            View
+                          </button>
+                        ) : (
+                          <span className="payment-pending-small">Pending</span>
+                        )}
                       </div>
                     </td>
                     <td>
@@ -183,25 +246,35 @@ const Orders = () => {
                       >
                         {statusOptions.map((status) => (
                           <option key={status} value={status}>
-                            {status}
+                            {status.charAt(0).toUpperCase() + status.slice(1)}
                           </option>
                         ))}
                       </select>
                     </td>
                     <td>
-                      {order.createdAt
-                        ? new Date(order.createdAt).toLocaleDateString()
-                        : new Date(order.created_at || "").toLocaleDateString()}
+                      <span className="date-cell">
+                        {formatDate(order.createdAt || order.created_at)}
+                      </span>
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={loadOrders}
-                        disabled={loading}
-                      >
-                        Refresh
-                      </button>
+                      <div className="action-buttons">
+                        <button
+                          type="button"
+                          className="btn-delete"
+                          onClick={() =>
+                            deleteOrder(
+                              order.id || order._id,
+                              order.orderNumber || order.order_number
+                            )
+                          }
+                          disabled={deleting === order.id || deleting === order._id}
+                          title="Delete order"
+                        >
+                          {deleting === order.id || deleting === order._id
+                            ? "Deleting..."
+                            : "Delete"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -209,24 +282,31 @@ const Orders = () => {
             </tbody>
           </table>
         </div>
+      </div>
 
-        {showPaymentModal && (
-          <div className="modal-backdrop" onClick={closePaymentModal}>
-            <div className="payment-modal" onClick={(e) => e.stopPropagation()}>
-              <button type="button" className="modal-close" onClick={closePaymentModal}>
-                ×
-              </button>
-              <div className="modal-body">
+      {showPaymentModal && (
+        <div className="modal-backdrop" onClick={closePaymentModal}>
+          <div className="payment-modal" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="modal-close"
+              onClick={closePaymentModal}
+              aria-label="Close modal"
+            >
+              ×
+            </button>
+            <div className="modal-body">
+              {selectedPaymentImage && (
                 <img
                   src={selectedPaymentImage}
                   alt="Payment Screenshot"
                   className="modal-image"
                 />
-              </div>
+              )}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </AdminLayout>
   );
 };

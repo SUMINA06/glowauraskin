@@ -71,6 +71,13 @@ router.patch(
   orderController.updateOrderStatus
 );
 
+router.delete(
+  "/:id",
+  authMiddleware,
+  adminMiddleware,
+  orderController.deleteOrder
+);
+
 // ==========================
 // USER ORDERS
 // ==========================
