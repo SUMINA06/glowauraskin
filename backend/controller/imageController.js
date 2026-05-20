@@ -27,7 +27,7 @@ const uploadImage = async (req, res) => {
 
     const imageData = {
       product_id,
-      image_path: `/uploads/${req.file.filename}`,
+      image_path: `/uploads/products/${req.file.filename}`,
       image_name: req.file.originalname
     };
 

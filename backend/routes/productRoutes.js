@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const upload = require('../config/multer');
 const productController = require('../controller/productController');
 
 // Create a new product
-router.post('/', productController.createProduct);
+router.post('/', upload.single('image'), productController.createProduct);
 
 // Get all products
 router.get('/', productController.getAllProducts);
@@ -21,7 +22,7 @@ router.get('/category/:category', productController.getProductsByCategory);
 router.get('/:id', productController.getProductById);
 
 // Update product
-router.put('/:id', productController.updateProduct);
+router.put('/:id', upload.single('image'), productController.updateProduct);
 
 // Delete product
 router.delete('/:id', productController.deleteProduct);

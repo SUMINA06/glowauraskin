@@ -24,7 +24,27 @@ const AdminProducts = () => {
       setLoading(true);
       const response = await apiClient.getAllProducts();
       const items = response.data || [];
-      setProducts(Array.isArray(items) ? items : []);
+      const productsWithImages = await Promise.all(
+        (Array.isArray(items) ? items : []).map(async (product) => {
+          try {
+            const imageResponse = await apiClient.getProductImages(product.id);
+            const images = imageResponse.data || [];
+            return {
+              ...product,
+              image:
+                images.length > 0
+                  ? `${apiClient.API_ROOT}${images[0].image_path}`
+                  : "https://via.placeholder.com/120x120",
+            };
+          } catch (e) {
+            return {
+              ...product,
+              image: "https://via.placeholder.com/120x120",
+            };
+          }
+        }),
+      );
+      setProducts(productsWithImages);
     } catch (error) {
       console.error("Error loading products:", error);
     } finally {
@@ -141,6 +161,16 @@ const AdminProducts = () => {
                     <td>{product.category}</td>
                     <td>Rs {product.price}</td>
                     <td>{product.stock}</td>
+                    <td>
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        style={{ width: 60, height: 60, objectFit: 'cover' }}
+                        onError={(e) => {
+                          e.target.src = 'https://via.placeholder.com/120x120';
+                        }}
+                      />
+                    </td>
                     <td>{product.createdAt || "-"}</td>
                     <td>
                       <button
@@ -165,7 +195,7 @@ const AdminProducts = () => {
           show={showModal}
           onClose={() => setShowModal(false)}
           title={editingId ? "Edit Product" : "Add Product"}>
-          <form id="product-form" onSubmit={handleSubmit}>
+          <form id="product-form" onSubmit={handleSubmit} encType="multipart/form-data">
             <div className="form-row">
               <label>Name</label>
               <input

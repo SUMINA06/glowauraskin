@@ -3,7 +3,7 @@ const path = require("path");
 const fs = require("fs");
 
 const uploadsDir = path.join(__dirname, "../uploads");
-const imageUploadDir = path.join(uploadsDir, "images");
+const productUploadDir = path.join(uploadsDir, "products");
 const paymentUploadDir = path.join(uploadsDir, "payments");
 
 const ensureDirectoryExists = (directory) => {
@@ -13,7 +13,7 @@ const ensureDirectoryExists = (directory) => {
 };
 
 ensureDirectoryExists(uploadsDir);
-ensureDirectoryExists(imageUploadDir);
+ensureDirectoryExists(productUploadDir);
 ensureDirectoryExists(paymentUploadDir);
 
 const storage = multer.diskStorage({
@@ -22,8 +22,8 @@ const storage = multer.diskStorage({
       return cb(null, paymentUploadDir);
     }
 
-    if (file.fieldname === "image") {
-      return cb(null, imageUploadDir);
+    if (file.fieldname === "image" || file.fieldname === "product_image") {
+      return cb(null, productUploadDir);
     }
 
     return cb(null, uploadsDir);

@@ -373,16 +373,17 @@ const getOrderById = async (req, res) => {
 const updateOrderStatus = async (req, res) => {
   try {
     const orderId = Number(req.params.id);
-    const { status } = req.body;
+    const { status, order_status } = req.body;
+    const selectedStatus = status || order_status;
 
-    if (!orderId || !status || !validOrderStatuses.includes(status)) {
+    if (!orderId || !selectedStatus || !validOrderStatuses.includes(selectedStatus)) {
       return res.status(400).json({
         success: false,
         message: "Invalid order ID or status",
       });
     }
 
-    await Order.updateById(orderId, { order_status: status });
+    await Order.updateById(orderId, { order_status: selectedStatus });
 
     return res.json({
       success: true,

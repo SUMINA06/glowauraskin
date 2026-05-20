@@ -57,6 +57,13 @@ router.get(
   orderController.getOrderById
 );
 
+router.put(
+  "/:id",
+  authMiddleware,
+  adminMiddleware,
+  orderController.updateOrderStatus
+);
+
 router.patch(
   "/:id/status",
   authMiddleware,

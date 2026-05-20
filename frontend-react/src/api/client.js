@@ -370,8 +370,8 @@ const apiClient = {
 
   updateOrderStatus: async (orderId, statusData) => {
     try {
-      const response = await axiosInstance.patch(
-        `/orders/${orderId}/status`,
+      const response = await axiosInstance.put(
+        `/orders/${orderId}`,
         { status: statusData.order_status ?? statusData.status },
       );
       return { data: response.data?.data ?? response.data };
@@ -384,29 +384,28 @@ const apiClient = {
   // Product create/update/delete (supports optional image upload)
   createProduct: async (productData, imageFile = null) => {
     try {
-      const response = await axiosInstance.post(
-        `/products`,
-        productData,
-        {
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-      const result = { data: response.data };
-
-      // If image file provided and product id returned, upload it
-      const productId = result.data?.data?.id || result.data?.id;
-      if (imageFile && productId) {
+      let response;
+      if (imageFile) {
         const fd = new FormData();
-        fd.append("product_id", productId);
+        Object.entries(productData).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            fd.append(key, value);
+          }
+        });
         fd.append("image", imageFile);
-        try {
-          await axiosInstance.post(`/images/upload`, fd);
-        } catch (imgErr) {
-          console.error("Error uploading product image:", imgErr);
-        }
+
+        response = await axiosInstance.post(`/products`, fd);
+      } else {
+        response = await axiosInstance.post(
+          `/products`,
+          productData,
+          {
+            headers: { "Content-Type": "application/json" },
+          },
+        );
       }
 
-      return result;
+      return { data: response.data };
     } catch (error) {
       console.error("Error creating product:", error);
       throw error;
@@ -415,23 +414,25 @@ const apiClient = {
 
   updateProduct: async (id, productData, imageFile = null) => {
     try {
-      const response = await axiosInstance.put(
-        `/products/${id}`,
-        productData,
-        {
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-
+      let response;
       if (imageFile) {
         const fd = new FormData();
-        fd.append("product_id", id);
+        Object.entries(productData).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            fd.append(key, value);
+          }
+        });
         fd.append("image", imageFile);
-        try {
-          await axiosInstance.post(`/images/upload`, fd);
-        } catch (imgErr) {
-          console.error("Error uploading product image:", imgErr);
-        }
+
+        response = await axiosInstance.put(`/products/${id}`, fd);
+      } else {
+        response = await axiosInstance.put(
+          `/products/${id}`,
+          productData,
+          {
+            headers: { "Content-Type": "application/json" },
+          },
+        );
       }
 
       return { data: response.data };

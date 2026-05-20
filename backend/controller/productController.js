@@ -1,12 +1,17 @@
+const fs = require("fs");
 const { Product } = require("../model/Product");
+const { Image } = require("../model/Image");
 
 // Create a new product
 const createProduct = async (req, res) => {
   try {
-    const { name, description, price, category } = req.body;
+    const { name, description, price, category, stock } = req.body;
 
     // Validate required fields
     if (!name || !price) {
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(400).json({
         success: false,
         message: "Product name and price are required",
@@ -16,12 +21,27 @@ const createProduct = async (req, res) => {
     const productData = {
       name,
       description: description || null,
-      price,
+      price: Number(price) || 0,
       category: category || null,
+      stock: Number.isFinite(Number(stock)) ? Number(stock) : 0,
     };
 
     const result = await Product.create(productData);
     const productId = result[0].insertId;
+
+    if (req.file) {
+      try {
+        await Image.create({
+          product_id: productId,
+          image_path: `/uploads/products/${req.file.filename}`,
+          image_name: req.file.originalname,
+        });
+      } catch (imageError) {
+        fs.unlinkSync(req.file.path);
+        await Product.delete(productId);
+        throw imageError;
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -175,9 +195,12 @@ const searchProducts = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const { name, description, price, category, stock } = req.body;
 
     if (!id) {
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(400).json({
         success: false,
         message: "Product ID is required",
@@ -187,13 +210,32 @@ const updateProduct = async (req, res) => {
     // Check if product exists
     const product = await Product.findById(id);
     if (product.length === 0) {
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(404).json({
         success: false,
         message: "Product not found",
       });
     }
 
+    const updates = {
+      name: name || product[0].name,
+      description: description || product[0].description,
+      price: price !== undefined ? Number(price) : product[0].price,
+      category: category || product[0].category,
+      stock: Number.isFinite(Number(stock)) ? Number(stock) : product[0].stock,
+    };
+
     await Product.update(id, updates);
+
+    if (req.file) {
+      await Image.create({
+        product_id: id,
+        image_path: `/uploads/products/${req.file.filename}`,
+        image_name: req.file.originalname,
+      });
+    }
 
     res.status(200).json({
       success: true,

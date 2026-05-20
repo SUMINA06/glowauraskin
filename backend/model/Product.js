@@ -68,7 +68,15 @@ const Product = {
   // Delete product
   delete: async (id) => {
     const query = 'DELETE FROM products WHERE id = ?';
-    return await db.query(query, [id]);
+    const [result] = await db.query(query, [id]);
+
+    const [countRows] = await db.query('SELECT COUNT(*) AS count FROM products');
+    const remaining = Array.isArray(countRows) ? countRows[0]?.count : 0;
+    if (remaining === 0) {
+      await db.query('ALTER TABLE products AUTO_INCREMENT = 1');
+    }
+
+    return result;
   },
 
   // Search products
