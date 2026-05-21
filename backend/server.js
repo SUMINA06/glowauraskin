@@ -20,6 +20,7 @@ const orderRoutes = require("./routes/orderRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 
 const app = express();
+const frontendDistPath = path.join(__dirname, "..", "frontend-react", "dist");
 
 // CORS Middleware
 app.use((req, res, next) => {
@@ -42,10 +43,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Serve static files from uploads folder
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-app.get("/", (req, res) => {
-  res.send("Hello from server side");
-});
+// Serve frontend assets when built
+app.use(express.static(frontendDistPath));
 
 // Routes
 app.use("/api/users", userRoutes);
@@ -53,6 +52,26 @@ app.use("/api/products", productRoutes);
 app.use("/api/images", imageRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/cart", cartRoutes);
+
+// API 404 handler so SPA fallback does not swallow API errors
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "API endpoint not found",
+  });
+});
+
+// SPA fallback for client-side routes
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/uploads")) {
+    return next();
+  }
+  res.sendFile(path.join(frontendDistPath, "index.html"), (err) => {
+    if (err) {
+      next(err);
+    }
+  });
+});
 
 app.use((err, req, res, next) => {
   console.error("Unhandled server error:", err);
