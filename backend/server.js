@@ -62,7 +62,7 @@ app.use("/api", (req, res) => {
 });
 
 // SPA fallback for client-side routes
-app.get("*", (req, res, next) => {
+app.get("/*", (req, res, next) => {
   if (req.path.startsWith("/uploads")) {
     return next();
   }
