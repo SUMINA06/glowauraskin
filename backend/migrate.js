@@ -185,6 +185,18 @@ async function migrateDatabase() {
         name: 'payment_gateway_response',
         ddl: "TEXT NULL",
       },
+      {
+        name: 'payment_method',
+        ddl: "ENUM('qr', 'esewa', 'khalti', 'cod') NOT NULL DEFAULT 'qr'",
+      },
+      {
+        name: 'payment_status',
+        ddl: "ENUM('pending', 'completed', 'failed', 'cancelled') NOT NULL DEFAULT 'pending'",
+      },
+      {
+        name: 'order_status',
+        ddl: "ENUM('pending','processing','paid','confirmed','shipped','delivered','cancelled') NOT NULL DEFAULT 'pending'",
+      },
     ];
 
     for (const column of requiredOrderColumns) {
@@ -279,11 +291,18 @@ async function migrateDatabase() {
     `);
 
     const existingOrderItemColumns = orderItemColumns.map((column) => column.COLUMN_NAME);
+    const requiredOrderItemCols = [
+      { name: 'product_name', ddl: 'VARCHAR(255) NOT NULL' },
+      { name: 'price', ddl: 'DECIMAL(10, 2) NOT NULL' },
+      { name: 'quantity', ddl: 'INT NOT NULL' },
+      { name: 'total_price', ddl: 'DECIMAL(10, 2) NOT NULL DEFAULT 0' },
+    ];
 
-    if (existingOrderItemColumns.includes('line_total') && !existingOrderItemColumns.includes('total_price')) {
-      await db.query(`ALTER TABLE order_items ADD COLUMN total_price DECIMAL(10, 2) NOT NULL DEFAULT 0`);
-      await db.query(`UPDATE order_items SET total_price = line_total`);
-      console.log("Migrated line_total to total_price in order_items");
+    for (const col of requiredOrderItemCols) {
+      if (!existingOrderItemColumns.includes(col.name)) {
+        await db.query(`ALTER TABLE order_items ADD COLUMN ${col.name} ${col.ddl}`);
+        console.log(`Added ${col.name} to order_items table`);
+      }
     }
 
     if (!existingOrderItemColumns.includes('created_at')) {

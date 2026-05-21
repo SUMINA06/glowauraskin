@@ -102,11 +102,13 @@ const Checkout = () => {
       const formData = new FormData();
 
       formData.append("orderId", orderId);
-      formData.append("name", form.name);
-      formData.append("email", form.email);
-      formData.append("phone", form.phone);
-      formData.append("address", form.address);
-      formData.append("totalAmount", getTotalPrice());
+      formData.append("name", form.name.trim());
+      formData.append("email", form.email.trim());
+      formData.append("phone", form.phone.trim());
+      formData.append("address", form.address.trim());
+      formData.append("shipping_address", form.address.trim());
+      formData.append("totalAmount", getTotalPrice().toFixed(2));
+      formData.append("payment_method", "qr");
 
       const storedUser = localStorage.getItem("user");
       if (storedUser) {
@@ -116,20 +118,39 @@ const Checkout = () => {
         }
       }
 
-      formData.append("cart", JSON.stringify(cart));
+      formData.append(
+        "cart",
+        JSON.stringify(
+          cart.map((item) => ({
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            qty: item.qty || 1,
+          })),
+        ),
+      );
 
       if (paymentScreenshot) {
         formData.append("paymentScreenshot", paymentScreenshot);
       }
 
-      await apiClient.createOrder(formData);
+      const response = await apiClient.createOrder(formData);
+      const createdOrder = response?.data?.data ?? response?.data;
 
       clearCart();
       setOrderPlaced(true);
 
-      setTimeout(() => {
-        navigate("/shop");
-      }, 3000);
+      // Optionally show order number then redirect
+      const orderNumber = createdOrder?.orderNumber || createdOrder?.order_number || null;
+      if (orderNumber) {
+        setTimeout(() => {
+          navigate(`/order-success/${orderNumber}`);
+        }, 2000);
+      } else {
+        setTimeout(() => {
+          navigate("/shop");
+        }, 3000);
+      }
     } catch (error) {
       console.error("Error placing order:", error);
 

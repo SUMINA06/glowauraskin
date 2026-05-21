@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS orders (
   total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
   payment_method ENUM('qr', 'esewa', 'khalti', 'cod') NOT NULL DEFAULT 'qr',
   payment_status ENUM('pending', 'completed', 'failed', 'cancelled') NOT NULL DEFAULT 'pending',
-  order_status ENUM('pending', 'confirmed', 'shipped', 'delivered', 'cancelled') NOT NULL DEFAULT 'pending',
+  order_status ENUM('pending', 'processing', 'paid', 'confirmed', 'shipped', 'delivered', 'cancelled') NOT NULL DEFAULT 'pending',
   payment_screenshot TEXT,
   transaction_id VARCHAR(255),
   payment_gateway_response TEXT,

@@ -1,9 +1,13 @@
+const db = require("../config/db");
 const { Order } = require("../model/Order");
+const { Payment } = require("../model/Payment");
 const { Product } = require("../model/Product");
 const { Cart } = require("../model/Cart");
 
 const validOrderStatuses = [
   "pending",
+  "processing",
+  "paid",
   "confirmed",
   "shipped",
   "delivered",
@@ -47,6 +51,7 @@ const formatOrderPayload = (rows) => {
     customerEmail: firstRow.customer_email,
     customerPhone: firstRow.customer_phone,
     customerAddress: firstRow.customer_address,
+    shippingAddress: firstRow.customer_address,
     subtotalAmount: Number(firstRow.subtotal_amount) || 0,
     taxAmount: Number(firstRow.tax_amount) || 0,
     deliveryCharge: Number(firstRow.delivery_charge) || 0,
@@ -56,8 +61,8 @@ const formatOrderPayload = (rows) => {
     paymentStatus: firstRow.payment_status,
     status: firstRow.order_status,
     paymentScreenshot: firstRow.payment_screenshot,
-    createdAt: new Date(firstRow.created_at).toISOString(),
-    updatedAt: new Date(firstRow.updated_at).toISOString(),
+    createdAt: firstRow.created_at ? new Date(firstRow.created_at).toISOString() : null,
+    updatedAt: firstRow.updated_at ? new Date(firstRow.updated_at).toISOString() : null,
     orderItems: items,
   };
 };
@@ -94,8 +99,8 @@ const formatOrdersPayload = (rows) => {
         paymentStatus: row.payment_status,
         status: row.order_status,
         paymentScreenshot: row.payment_screenshot,
-        createdAt: new Date(row.created_at).toISOString(),
-        updatedAt: new Date(row.updated_at).toISOString(),
+        createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
+        updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
         orderItems: [],
       };
     }
@@ -199,45 +204,78 @@ const parseCartPayload = (cart) => {
     }
   }
 
+  // Fallback: try to extract a JSON array substring like [ ... ] and parse it
+  try {
+    const firstBracket = value.indexOf('[');
+    const lastBracket = value.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+      const sub = value.slice(firstBracket, lastBracket + 1);
+      const parsedSub = JSON.parse(sub);
+      if (Array.isArray(parsedSub)) return parsedSub;
+    }
+  } catch (e) {
+    // ignore
+  }
+
   return null;
 };
 
 const createOrder = async (req, res) => {
-  try {
-    let {
-      orderId,
-      name,
-      email,
-      phone,
-      address,
-      totalAmount,
-      cart,
-    } = req.body;
+  let {
+    orderId,
+    name,
+    email,
+    phone,
+    address,
+    totalAmount,
+    cart,
+    payment_method,
+    userId,
+    shipping_address,
+  } = req.body;
 
+  console.log("[createOrder] headers:", req.headers['content-type']);
+  console.log("[createOrder] body fields:", {
+    orderId,
+    name,
+    email,
+    phone,
+    address,
+    totalAmount,
+    cartType: typeof cart,
+    cartSample: cart ? String(cart).slice(0, 200) : null,
+    payment_method,
+    userId,
+    shipping_address,
+  });
+  console.log("[createOrder] raw cart:", cart);
+  console.log("[createOrder] file:", req.file ? { fieldname: req.file.fieldname, originalname: req.file.originalname, mimetype: req.file.mimetype, filename: req.file.filename, path: req.file.path } : null);
+
+  try {
     cart = parseCartPayload(cart);
 
-    if (!cart) {
+    if (!cart || !Array.isArray(cart) || cart.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "Cart data is invalid JSON",
+        message: "Cart data is invalid or empty.",
       });
     }
 
     const subtotalAmount = Number(totalAmount);
+    const deliveryAddress = (address || shipping_address || "").trim();
 
     if (
       !name ||
       !email ||
       !phone ||
-      !address ||
+      !deliveryAddress ||
       Number.isNaN(subtotalAmount) ||
-      !cart ||
-      !Array.isArray(cart) ||
-      cart.length === 0
+      subtotalAmount <= 0
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid order data. All fields and screenshot are required.",
+        message:
+          "Invalid order data. Name, email, phone, address, total amount, and cart are required.",
       });
     }
 
@@ -252,57 +290,123 @@ const createOrder = async (req, res) => {
       });
     }
 
-    const parsedUserId = req.body.userId ? Number(req.body.userId) : null;
+    const parsedUserId = userId ? Number(userId) : null;
     const orderData = {
       order_number:
         orderId && typeof orderId === "string"
           ? orderId
-          : generateOrderNumber(),
+          : `NM-${Date.now()}`,
       user_id: parsedUserId && !Number.isNaN(parsedUserId) ? parsedUserId : null,
       customer_name: name.trim(),
-      customer_email: email.trim(),
+      customer_email: email.trim().toLowerCase(),
       customer_phone: phone.trim(),
-      customer_address: address.trim(),
+      customer_address: deliveryAddress,
       subtotal_amount: subtotalAmount,
       tax_amount: 0,
       delivery_charge: 0,
       discount_amount: 0,
       total_amount: subtotalAmount,
-      payment_method: "qr",
+      payment_method: payment_method || "qr",
       payment_status: "pending",
       order_status: "pending",
       payment_screenshot: paymentScreenshot,
     };
 
-    const [orderResult] = await Order.create(orderData);
-    const orderIdCreated = orderResult?.insertId;
+    const connection = await db.getConnection();
+    let orderIdCreated = null;
 
-    if (!orderIdCreated) {
-      throw new Error("Unable to save order");
+    try {
+      await connection.beginTransaction();
+
+      const [orderResult] = await connection.query(
+        "INSERT INTO orders SET ?",
+        [orderData],
+      );
+
+      orderIdCreated = orderResult?.insertId;
+      if (!orderIdCreated) {
+        throw new Error("Unable to save order.");
+      }
+
+      const orderItems = cart.map((item) => {
+        const quantity = Number(item.qty || item.quantity || 1);
+        const price = Number(item.price) || 0;
+
+        return [
+          orderIdCreated,
+          item.id || item.productId || null,
+          item.name || item.product_name || item.title || "Product",
+          price,
+          quantity,
+          price * quantity,
+        ];
+      });
+
+      const insertItemsQuery =
+        "INSERT INTO order_items (order_id, product_id, product_name, price, quantity, total_price) VALUES ?";
+      await connection.query(insertItemsQuery, [orderItems]);
+
+      // Prepare payment record
+      const transactionId = req.body.transaction_id || `TX-${Date.now()}-${Math.random().toString(36).slice(2,9).toUpperCase()}`;
+      const clientPaymentStatus = (req.body.payment_status || '').toLowerCase();
+      let paymentStatus = 'pending';
+      if (clientPaymentStatus && ['completed','pending','failed','cancelled'].includes(clientPaymentStatus)) {
+        paymentStatus = clientPaymentStatus;
+      } else if ((orderData.payment_method || '').toLowerCase() === 'cod') {
+        paymentStatus = 'completed';
+      }
+
+      // Prevent duplicate payment records by transaction_id
+      if (transactionId) {
+        const existingPayment = await connection.query('SELECT id FROM payments WHERE transaction_id = ? LIMIT 1', [transactionId]);
+        const existingRows = existingPayment && existingPayment[0] ? existingPayment[0] : [];
+        if (Array.isArray(existingRows) && existingRows.length > 0) {
+          // Duplicate transaction id; attach to order and continue
+          await connection.query('UPDATE orders SET transaction_id = ?, payment_status = ? WHERE id = ?', [transactionId, paymentStatus, orderIdCreated]);
+        } else {
+          const paymentData = {
+            order_id: orderIdCreated,
+            transaction_id: transactionId,
+            payment_method: orderData.payment_method,
+            payment_status: paymentStatus,
+            amount: Number(orderData.total_amount) || 0,
+            gateway_response: req.body.gateway_response || null,
+          };
+          await connection.query('INSERT INTO payments SET ?', [paymentData]);
+          await connection.query('UPDATE orders SET transaction_id = ?, payment_status = ? WHERE id = ?', [transactionId, paymentStatus, orderIdCreated]);
+        }
+      }
+
+      // If payment is completed, mark order_status as 'paid'
+      if (paymentStatus === 'completed') {
+        await connection.query('UPDATE orders SET order_status = ? WHERE id = ?', ['paid', orderIdCreated]);
+      }
+
+      await connection.commit();
+    } catch (innerError) {
+      await connection.rollback();
+      console.error("Order transaction failed:", innerError);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to save order transaction.",
+        error: innerError.message,
+      });
+    } finally {
+      connection.release();
     }
 
-    const orderItems = cart.map((item) => {
-      const quantity = Number(item.qty) || 1;
-      const price = Number(item.price) || 0;
-
-      return {
-        order_id: orderIdCreated,
-        product_id: item.id || null,
-        product_name: item.name || item.title || "Product",
-        price,
-        quantity,
-        total_price: price * quantity,
-      };
-    });
-
-    await Order.createItems(orderItems);
-
     if (orderData.user_id) {
-      await Cart.clearByUserId(orderData.user_id);
+      try {
+        await Cart.clearByUserId(orderData.user_id);
+      } catch (clearError) {
+        console.warn("Unable to clear user cart after order:", clearError);
+      }
     }
 
     const createdRows = await Order.findByIdWithItems(orderIdCreated);
-    const createdOrder = formatOrderPayload(createdRows);
+    const createdOrder = Array.isArray(createdRows) && createdRows.length > 0
+      ? formatOrderPayload(createdRows)
+      : null;
 
     return res.status(201).json({
       success: true,

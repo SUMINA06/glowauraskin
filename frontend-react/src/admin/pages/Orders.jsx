@@ -5,6 +5,8 @@ import "../css/tables.css";
 
 const statusOptions = [
   "pending",
+  "processing",
+  "paid",
   "confirmed",
   "shipped",
   "delivered",
@@ -228,9 +230,9 @@ const Orders = () => {
                                 order.paymentScreenshot || order.payment_screenshot
                               )
                             }
-                            title="View payment screenshot"
+                            title="Preview payment screenshot"
                           >
-                            View
+                            Payment Done
                           </button>
                         ) : (
                           <span className="payment-pending-small">Pending</span>

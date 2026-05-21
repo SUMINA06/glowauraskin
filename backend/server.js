@@ -1,6 +1,7 @@
-require("dotenv").config();
 const express = require("express");
 const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+const multer = require("multer");
 
 const db = require("./config/db");
 const { createUserTable, ensureDefaultAdmin } = require("./model/User");
@@ -8,6 +9,7 @@ const { createProductTable } = require("./model/Product");
 const { createImageTable } = require("./model/Image");
 const { createOrderTable, createOrderItemsTable } = require("./model/Order");
 const { createCartTable } = require("./model/Cart");
+const { createPaymentTable } = require("./model/Payment");
 const { migrateDatabase, addRoleColumn } = require("./migrate");
 
 // Import routes
@@ -48,6 +50,34 @@ app.use("/api/images", imageRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/cart", cartRoutes);
 
+app.use((err, req, res, next) => {
+  console.error("Unhandled server error:", err);
+  if (err instanceof multer.MulterError) {
+    const message = err.code === "LIMIT_FILE_SIZE"
+      ? "Uploaded file is too large. Maximum size is 10MB."
+      : err.message;
+    return res.status(400).json({
+      success: false,
+      message,
+      error: err.message,
+    });
+  }
+
+  if (err.message && err.message.includes("Only image files")) {
+    return res.status(400).json({
+      success: false,
+      message: err.message,
+      error: err.message,
+    });
+  }
+
+  res.status(500).json({
+    success: false,
+    message: "Internal server error",
+    error: err.message || "Unknown error",
+  });
+});
+
 // Verify the connection to the database
 const verifyDatabaseConnection = async () => {
   try {
@@ -71,6 +101,8 @@ const initializeTables = async () => {
     await createOrderItemsTable();
     await createCartTable();
     await createImageTable();
+    // Payments depend on orders, create after orders are present
+    await createPaymentTable();
 
     // Add role column for role-based auth if needed
     await addRoleColumn();
