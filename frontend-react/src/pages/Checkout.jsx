@@ -19,6 +19,7 @@ const Checkout = () => {
   const [submitting, setSubmitting] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
+  const [notification, setNotification] = useState(null);
 
   const navigate = useNavigate();
 
@@ -137,20 +138,20 @@ const Checkout = () => {
       const response = await apiClient.createOrder(formData);
       const createdOrder = response?.data?.data ?? response?.data;
 
+      // Success: clear cart, show success and redirect to shop
       clearCart();
       setOrderPlaced(true);
-
-      // Optionally show order number then redirect
       const orderNumber = createdOrder?.orderNumber || createdOrder?.order_number || null;
-      if (orderNumber) {
-        setTimeout(() => {
-          navigate(`/order-success/${orderNumber}`);
-        }, 2000);
-      } else {
-        setTimeout(() => {
-          navigate("/shop");
-        }, 3000);
-      }
+      setNotification(
+        orderNumber
+          ? `Order placed successfully — ${orderNumber}`
+          : "Order placed successfully"
+      );
+
+      // Redirect to shop after short delay
+      setTimeout(() => {
+        navigate("/shop");
+      }, 2500);
     } catch (error) {
       console.error("Error placing order:", error);
 
@@ -235,7 +236,7 @@ const Checkout = () => {
                   id="name"
                   type="text"
                   name="name"
-                  placeholder="John Doe"
+                  placeholder="full name"
                   value={form.name}
                   onChange={handleChange}
                   disabled={submitting}
@@ -252,7 +253,7 @@ const Checkout = () => {
                     id="email"
                     type="email"
                     name="email"
-                    placeholder="john@example.com"
+                    placeholder="something@example.com"
                     value={form.email}
                     onChange={handleChange}
                     disabled={submitting}
@@ -314,7 +315,7 @@ const Checkout = () => {
                         rel="noopener noreferrer"
                         className="qr-link"
                       >
-                        Open eSewa
+                    
                       </a>
                     </div>
                   </div>
@@ -335,7 +336,7 @@ const Checkout = () => {
                         rel="noopener noreferrer"
                         className="qr-link"
                       >
-                        Open Khalti
+                    
                       </a>
                     </div>
                   </div>

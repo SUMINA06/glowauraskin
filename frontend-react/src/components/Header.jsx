@@ -86,7 +86,7 @@ const Header = () => {
               <b>
                 {user ? (
                   <>
-                    <span>{user.username || user.email}</span>
+                    <span style={{ color: '#000' }}>{user.username || user.email}</span>
                     <br />
                     <button
                       onClick={handleLogout}
