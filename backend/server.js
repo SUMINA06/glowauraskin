@@ -43,6 +43,10 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files from uploads folder
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+app.get("/", (req, res) => {
+  res.send("Hello from server side");
+});
+
 // Routes
 app.use("/api/users", userRoutes);
 app.use("/api/products", productRoutes);
@@ -131,7 +135,3 @@ initializeTables()
     console.error("Failed to initialize database tables:", err);
     process.exit(1);
   });
-
-app.get("/", (req, res) => {
-  res.send("Hello from server side");
-});
