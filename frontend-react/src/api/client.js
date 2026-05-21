@@ -1,8 +1,12 @@
 import axios from "axios";
 
 // Use environment variable when available, otherwise default to backend port 3000.
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
+const RAW_API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+
+const API_BASE_URL = RAW_API_BASE_URL.endsWith("/api")
+  ? RAW_API_BASE_URL
+  : `${RAW_API_BASE_URL.replace(/\/$/, "")}/api`;
 
 const API_ROOT = API_BASE_URL.replace(/\/api\/?$/, "");
 
