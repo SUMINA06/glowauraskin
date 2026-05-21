@@ -32,10 +32,12 @@ const Login = () => {
         email: form.email,
         password: form.password,
       });
-      const user = response.data || response;
+      const apiPayload = response.data || response;
+      const user = apiPayload?.data ?? apiPayload;
+      const userRole = user?.role ?? apiPayload?.role;
 
       // Check user role and redirect accordingly
-      if (user.role === "admin" || user.is_admin) {
+      if (userRole === "admin" || user.is_admin) {
         // Admin users should use admin login
         setError("Admin users must use the admin login page.");
         setSubmitting(false);
