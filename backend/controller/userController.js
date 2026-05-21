@@ -1,12 +1,10 @@
 const { User } = require("../model/User");
 const { generateToken } = require("../config/jwt");
 
-// Create a new user (default role: 'user') with password hashing
 const createUser = async (req, res) => {
   try {
     const { username, email, password, phone, address } = req.body;
 
-    // Validate required fields
     if (!username || !email || !password) {
       return res.status(400).json({
         success: false,
@@ -14,7 +12,6 @@ const createUser = async (req, res) => {
       });
     }
 
-    // Hash password before storing
     const hashedPassword = await User.hashPassword(password);
 
     const userData = {
@@ -36,7 +33,6 @@ const createUser = async (req, res) => {
   } catch (error) {
     console.error("Error creating user:", error);
 
-    // Handle duplicate entry errors
     if (error.code === "ER_DUP_ENTRY") {
       let message = "Email or username already exists";
       if (error.message.includes("username")) {
@@ -58,12 +54,10 @@ const createUser = async (req, res) => {
   }
 };
 
-// Create a new admin user (role: 'admin') with password hashing
 const createAdminUser = async (req, res) => {
   try {
     const { username, email, password, phone, address } = req.body;
 
-    // Validate required fields
     if (!username || !email || !password) {
       return res.status(400).json({
         success: false,
@@ -71,7 +65,6 @@ const createAdminUser = async (req, res) => {
       });
     }
 
-    // Hash password before storing
     const hashedPassword = await User.hashPassword(password);
 
     const userData = {
@@ -105,7 +98,6 @@ const createAdminUser = async (req, res) => {
   } catch (error) {
     console.error("Error creating admin user:", error.message || error);
 
-    // Handle duplicate entry errors and existing admin gracefully
     if (error.code === "ER_DUP_ENTRY") {
       if (error.message.includes("email")) {
         console.log("Admin user already exists");
@@ -135,7 +127,6 @@ const createAdminUser = async (req, res) => {
   }
 };
 
-// Get all users
 const getAllUsers = async (req, res) => {
   try {
     const users = await User.findAll();
@@ -155,7 +146,6 @@ const getAllUsers = async (req, res) => {
   }
 };
 
-// Get user by ID
 const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -190,7 +180,6 @@ const getUserById = async (req, res) => {
   }
 };
 
-// Get user by email
 const getUserByEmail = async (req, res) => {
   try {
     const { email } = req.params;
@@ -225,7 +214,6 @@ const getUserByEmail = async (req, res) => {
   }
 };
 
-// Login user by email + password with JWT token
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -248,7 +236,6 @@ const loginUser = async (req, res) => {
 
     const user = users[0];
 
-    // Compare password with hashed password
     const isPasswordValid = await User.comparePassword(password, user.password);
 
     if (!isPasswordValid) {
@@ -258,15 +245,13 @@ const loginUser = async (req, res) => {
       });
     }
 
-    // Generate JWT token
-    const token = generateToken(user.id, user.email, user.username, user.role);
+    const activeRole = (user.is_admin || user.role === "admin") ? "admin" : "user";
+    const token = generateToken(user.id, user.email, user.username, activeRole);
 
-    // Do not return password to client
     const { password: _pw, ...safeUser } = user;
 
-    // Ensure role is included
     if (!safeUser.role) {
-      safeUser.role = safeUser.is_admin ? "admin" : "user";
+      safeUser.role = activeRole;
     }
 
     res.status(200).json({
@@ -285,10 +270,8 @@ const loginUser = async (req, res) => {
   }
 };
 
-// Admin Login using database credentials with JWT token
 const adminLogin = async (req, res) => {
   try {
-    // Accept either `email` or `username` from the client as the identifier
     const { email, username, password } = req.body;
     const identifier = (email || username || "").toString();
 
@@ -299,7 +282,6 @@ const adminLogin = async (req, res) => {
       });
     }
 
-    // Find admin user by email or username
     const users = await User.findByEmailOrUsername(identifier);
 
     if (!users || users.length === 0) {
@@ -311,7 +293,6 @@ const adminLogin = async (req, res) => {
 
     const user = users[0];
 
-    // Check if user has admin role
     if (user.role !== "admin" && !user.is_admin) {
       return res.status(403).json({
         success: false,
@@ -319,7 +300,6 @@ const adminLogin = async (req, res) => {
       });
     }
 
-    // Compare password with hashed password
     const isPasswordValid = await User.comparePassword(password, user.password);
 
     if (!isPasswordValid) {
@@ -329,15 +309,13 @@ const adminLogin = async (req, res) => {
       });
     }
 
-    // Generate JWT token
-    const token = generateToken(user.id, user.email, user.username, user.role);
+    const token = generateToken(user.id, user.email, user.username, "admin");
 
-    // Return a safe admin user object
     const safeUser = {
       id: user.id,
       username: user.username,
       email: user.email,
-      role: user.role,
+      role: "admin",
       is_admin: user.is_admin,
     };
 
@@ -357,12 +335,8 @@ const adminLogin = async (req, res) => {
   }
 };
 
-
-// Verify admin token and return user info
 const verifyAdminToken = async (req, res) => {
   try {
-    // Token is already verified by authMiddleware
-    // req.user contains the decoded token data
     const user = await User.findById(req.user.userId);
 
     if (!user || user.length === 0) {
@@ -372,7 +346,6 @@ const verifyAdminToken = async (req, res) => {
       });
     }
 
-    // Check if user has admin role
     if (user[0].role !== "admin" && !user[0].is_admin) {
       return res.status(403).json({
         success: false,
@@ -380,7 +353,6 @@ const verifyAdminToken = async (req, res) => {
       });
     }
 
-    // Return safe user info
     const { password: _pw, ...safeUser } = user[0];
 
     res.status(200).json({
@@ -397,6 +369,7 @@ const verifyAdminToken = async (req, res) => {
     });
   }
 };
+
 const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -409,7 +382,6 @@ const updateUser = async (req, res) => {
       });
     }
 
-    // Check if user exists
     const user = await User.findById(id);
     if (user.length === 0) {
       return res.status(404).json({
@@ -434,7 +406,6 @@ const updateUser = async (req, res) => {
   }
 };
 
-// Delete user
 const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -446,7 +417,6 @@ const deleteUser = async (req, res) => {
       });
     }
 
-    // Check if user exists
     const user = await User.findById(id);
     if (user.length === 0) {
       return res.status(404).json({
